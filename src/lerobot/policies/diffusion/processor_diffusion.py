@@ -21,7 +21,9 @@ import torch
 from lerobot.processor import (
     PolicyAction,
     PolicyProcessorPipeline,
-    make_default_pre_post_processors,
+    SE3RelativeActionsProcessorStep,
+    make_default_policy_processor_steps,
+    make_policy_processor_pipelines,
 )
 
 from .configuration_diffusion import DiffusionConfig
@@ -56,4 +58,11 @@ def make_diffusion_pre_post_processors(
     Returns:
         A tuple containing the configured pre-processor and post-processor pipelines.
     """
-    return make_default_pre_post_processors(config, dataset_stats)
+    s = make_default_policy_processor_steps(config, dataset_stats)
+    # use_relative_actions: absolute -> relative pose actions on the raw (unnormalized) state, before the
+    # normalizer; only inserted when enabled, so the default pipeline (and saved checkpoints) are unchanged
+    relative_steps = [SE3RelativeActionsProcessorStep(enabled=True)] if config.use_relative_actions else []
+    return make_policy_processor_pipelines(
+        input_steps=[s.rename_observations, s.add_batch_dim, s.to_device, *relative_steps, s.normalize],
+        output_steps=[s.unnormalize, s.to_cpu],
+    )
